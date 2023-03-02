@@ -1,0 +1,9 @@
+apiVersion: v2
+name: zerossl-issuer
+description: Use zerossl to issue certs.
+
+type: application
+
+version: 1.0.0
+
+appVersion: "1.0.0"

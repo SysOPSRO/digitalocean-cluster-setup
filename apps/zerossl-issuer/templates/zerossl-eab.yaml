@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: cert-manager # Must be the namespace cert-manager is installed in
+  name: zerossl-eab
+stringData:
+  secret: {{ .Values.ZEROSSL_EAB }}

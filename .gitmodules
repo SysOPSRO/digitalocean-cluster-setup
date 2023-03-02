@@ -1,0 +1,3 @@
+[submodule "src/kube-oidc-proxy"]
+	path = src/kube-oidc-proxy
+	url = https://github.com/TremoloSecurity/kube-oidc-proxy.git

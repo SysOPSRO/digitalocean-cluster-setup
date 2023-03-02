@@ -1,0 +1,21 @@
+installCRDs: true
+serviceAccount:
+  create: true
+  name: cert-manager
+# breaks system with:
+#
+# Secret "zerossl-eab" in namespace "cert-manager" exists and cannot be
+# imported into the current release: invalid ownership metadata;
+# annotation validation error: key "meta.helm.sh/release-namespace"
+# must equal "dex": current value is "cert-manager"
+#
+extraArgs:
+  - --enable-certificate-owner-ref=false
+# disabled temporarily.
+# prometheus:
+#   servicemonitor:
+#     enabled: true
+webhook:
+  # Needed for Calico
+  securePort: 10251
+  hostNetwork: true

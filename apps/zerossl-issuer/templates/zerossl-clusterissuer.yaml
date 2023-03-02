@@ -1,0 +1,19 @@
+kind: ClusterIssuer
+apiVersion: cert-manager.io/v1
+metadata:
+  name: zerossl-prod
+spec:
+  acme:
+    email: {{ .Values.ZEROSSL_EMAIL }}
+    externalAccountBinding:
+      keyID: {{ .Values.ZEROSSL_KID }}
+      keySecretRef:
+        name: zerossl-eab
+        key: secret
+    privateKeySecretRef:
+      name: zerossl-prod
+    server: 'https://acme.zerossl.com/v2/DV90'
+    solvers:
+      - http01:
+          ingress:
+            class: nginx
