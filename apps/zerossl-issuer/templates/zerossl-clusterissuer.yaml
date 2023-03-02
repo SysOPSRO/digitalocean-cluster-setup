@@ -1,6 +1,9 @@
 kind: ClusterIssuer
 apiVersion: cert-manager.io/v1
 metadata:
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
   name: zerossl-prod
 spec:
   acme:

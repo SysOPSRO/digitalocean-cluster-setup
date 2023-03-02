@@ -35,7 +35,9 @@ config:
         clientSecret: {{ requiredEnv "GOOG_CLIENT_SECRET" }}
         redirectURI: https://dex.{{ requiredEnv "CLUSTER_FQDN" }}/callback
         hostedDomains:
-         - {{ requiredEnv "GOOG_ALLOWED_DOMAIN" }}
+        {{- range (requiredEnv "GOOG_ALLOWED_DOMAIN" | splitList " ") }}
+         - {{ . | quote }}
+        {{ end }}
 
   staticClients:
     - id: dex-k8s-auth

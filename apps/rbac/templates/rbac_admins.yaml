@@ -1,0 +1,67 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.RBAC_NAME }}-admin-local
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
+rules:
+  - apiGroups: ["dex.coreos.com"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.RBAC_NAME }}-admin-local
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
+roleRef:
+  kind: Role
+  apiGroup: rbac.authorization.k8s.io
+  name: {{ .Values.RBAC_NAME }}-admin-local
+subjects:
+{{- range ( .Values.RBAC_ADMIN_USERS | splitList " ") }}
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: {{ . | quote }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Values.RBAC_NAME }}-admin-cluster
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
+rules:
+- apiGroups:
+  - '*'
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- nonResourceURLs:
+  - '*'
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.RBAC_NAME }}-admin-cluster
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
+roleRef:
+  kind: ClusterRole
+  apiGroup: rbac.authorization.k8s.io
+  name: {{ .Values.RBAC_NAME }}-admin-cluster
+subjects:
+
+{{- range ( .Values.RBAC_ADMIN_USERS | splitList " ") }}
+- apiGroup: rbac.authorization.k8s.io
+  kind: User
+  name: {{ . | quote }}
+{{- end }}

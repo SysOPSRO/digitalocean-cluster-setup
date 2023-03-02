@@ -45,6 +45,13 @@ releases:
     values:
       - readenv.yaml.gotmpl
 
+  - name: rbac-manager
+    chart: apps/rbac
+    installed: true
+    disableValidation: false
+    values:
+      - readenv.yaml.gotmpl
+
   - name: dex
     namespace: dex
     createNamespace: true
