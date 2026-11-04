@@ -65,3 +65,22 @@ subjects:
   kind: User
   name: {{ . | quote }}
 {{- end }}
+
+{{- if .Values.RBAC_DEFAULT_CLUSTERROLE }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Values.RBAC_NAME }}-default-users
+  annotations:
+    app.kubernetes.io/instance: {{ .Values.CLUSTER_FQDN }}
+    app.kubernetes.io/managed-by: {{ .Values.ZEROSSL_EMAIL }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Values.RBAC_DEFAULT_CLUSTERROLE }}
+subjects:
+- apiGroup: rbac.authorization.k8s.io
+  kind: Group
+  name: system:authenticated
+{{- end }}

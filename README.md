@@ -35,6 +35,8 @@ export ZEROSSL_KID=""
 export RBAC_NAME=""
 #list of admins separated by space " "
 export RBAC_ADMIN_USERS=""
+# default cluster role for any authenticated (non-admin) user, e.g. view; leave empty to disable
+export RBAC_DEFAULT_CLUSTERROLE=""
 # cert / dns / migration variables
 export CERT_PROVIDER="zerossl"
 export CERT_MANAGER_ENABLED="true"
