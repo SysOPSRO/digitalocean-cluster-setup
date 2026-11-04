@@ -1,3 +1,7 @@
+image:
+  repository: {{ env "DEX_REPO" }}
+  tag: {{ env "DEX_TAG" }}
+  pullPolicy: IfNotPresent
 config:
   clusters:
     - name: {{ requiredEnv "DEX_NAME" }}

@@ -48,6 +48,8 @@ export DNS_SECRET_NAME="dns-credentials"
 export USE_EXTERNAL_SECRETS="true"
 export INSTALL_INGRESS_NGINX="true"
 export INGRESS_CLASS="nginx"
+export DEX_REPO="docker.io/mintel/dex-k8s-authenticator"
+export DEX_TAG="latest"
 ```
 
 4. Source the env file

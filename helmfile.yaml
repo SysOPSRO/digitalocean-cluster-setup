@@ -36,7 +36,6 @@ releases:
     missingFileHandler: Warn
     values:
       - apps/cert-manager/values.yaml
-    installed: true
     wait: true
     waitForJobs: true
 
