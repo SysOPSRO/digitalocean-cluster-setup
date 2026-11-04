@@ -47,6 +47,8 @@ releases:
       - readenv.yaml.gotmpl
 
   - name: rbac-manager
+    namespace: dex
+    createNamespace: true
     chart: apps/rbac
     installed: true
     disableValidation: false
@@ -77,5 +79,4 @@ releases:
     chart: src/kube-oidc-proxy/deploy/charts/kube-oidc-proxy
     missingFileHandler: Warn
     values:
-      - readenv.yaml.gotmpl
       - apps/kube-oidc-proxy/values.yaml.gotmpl
