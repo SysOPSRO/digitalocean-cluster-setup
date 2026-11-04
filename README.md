@@ -56,7 +56,7 @@ export INGRESS_CLASS="nginx"
 
 5. Deploy components:
 
-`helm sync`
+`helmfile sync`
 
 6. Watch for the load balancer ip so you add it to your DNS:
 
@@ -104,7 +104,7 @@ kube-oidc-proxy   kube-oidc-proxy         <none>   oidcproxy.cluster.domain.org 
 
 ## Manual secrets (when not using external-secrets)
 
-If `USE_EXTERNAL_SECRETS=false`, create these secrets manually before `helm sync`.
+If `USE_EXTERNAL_SECRETS=false`, create these secrets manually before `helmfile sync`.
 
 ### DNS provider secret (cert-manager DNS-01)
 
