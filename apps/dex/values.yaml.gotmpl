@@ -49,3 +49,8 @@ config:
       name: {{ requiredEnv "DEX_NAME" }}
       redirectURIs:
         - https://login.{{ requiredEnv "CLUSTER_FQDN" }}/callback
+
+{{- if env "NODE_ARCH" }}
+nodeSelector:
+  kubernetes.io/arch: {{ env "NODE_ARCH" }}
+{{- end }}

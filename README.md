@@ -2,6 +2,7 @@
 Setup needed components on a digitalocean cluster, after downloading the admin kube config.
 
 ## Requirements:
+0. Cluster nodes must be `linux/amd64` (mixed arm64 nodes are not supported by all images)
 1. DigitalOcean K8S cluster created and config downloaded
 2. ZeroSSL account and EAB Credentials for ACME Clients
 3. Google OAuth and OAuth 2.0 Client credentials configured
@@ -48,6 +49,7 @@ export DNS_SECRET_NAME="dns-credentials"
 export USE_EXTERNAL_SECRETS="true"
 export INSTALL_INGRESS_NGINX="true"
 export INGRESS_CLASS="nginx"
+export NODE_ARCH="amd64"
 export DEX_REPO="docker.io/mintel/dex-k8s-authenticator"
 export DEX_TAG="latest"
 ```
