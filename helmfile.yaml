@@ -59,6 +59,11 @@ releases:
     namespace: dex
     createNamespace: true
     chart: dex/dex
+    hooks:
+      - events: ["postupgrade", "postinstall"]
+        showlogs: true
+        command: "kubectl"
+        args: ["rollout", "restart", "deployment/dex", "-n", "dex"]
     version: 0.13.0
     missingFileHandler: Warn
     values:
@@ -68,6 +73,11 @@ releases:
     namespace: dex
     createNamespace: true
     chart: skm/dex-k8s-authenticator
+    hooks:
+      - events: ["postupgrade", "postinstall"]
+        showlogs: true
+        command: "kubectl"
+        args: ["rollout", "restart", "deployment/dex-k8s-authenticator", "-n", "dex"]
     version: 0.0.2
     missingFileHandler: Warn
     values:
@@ -77,6 +87,11 @@ releases:
     namespace: kube-oidc-proxy
     createNamespace: true
     chart: src/kube-oidc-proxy/deploy/charts/kube-oidc-proxy
+    hooks:
+      - events: ["postupgrade", "postinstall"]
+        showlogs: true
+        command: "kubectl"
+        args: ["rollout", "restart", "deployment/kube-oidc-proxy", "-n", "kube-oidc-proxy"]
     missingFileHandler: Warn
     values:
       - apps/kube-oidc-proxy/values.yaml.gotmpl
