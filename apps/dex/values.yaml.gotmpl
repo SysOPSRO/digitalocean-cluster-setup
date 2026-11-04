@@ -20,6 +20,10 @@ ingress:
 
 config:
   issuer: https://dex.{{ requiredEnv "CLUSTER_FQDN" }}
+{{- if env "DEX_LOGO_URL" }}
+  frontend:
+    logoUrl: {{ env "DEX_LOGO_URL" }}
+{{- end }}
   storage:
     type: kubernetes
     config:
@@ -28,6 +32,7 @@ config:
   oauth2:
     responseTypes: ["code", "token", "id_token"]
     skipApprovalScreen: true
+    alwaysShowLoginScreen: {{ env "DEX_ALWAYS_SHOW_LOGIN" }}
 
   connectors:
     - type: oidc
