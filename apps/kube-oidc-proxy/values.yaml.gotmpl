@@ -43,11 +43,10 @@ oidc:
   # OIDC issuer URL. If not provided, default hosts root CA's will be used.
   caPEM: |
 {{- if eq (env "CERT_PROVIDER") "zerossl" }}
-{{ readFile (env "ZEROSSL_CA_PEM_FILE") }}
+{{ readFile (printf "../../%s" (env "ZEROSSL_CA_PEM_FILE")) | nindent 4 }}
 {{- else }}
-{{ readFile (env "LETS_ENCRYPT_CA_PEM_FILE") }}
+{{ readFile (printf "../../%s" (env "LETS_ENCRYPT_CA_PEM_FILE")) | nindent 4 }}
 {{- end }}
-
   usernamePrefix:
   groupsClaim:
   groupsPrefix:

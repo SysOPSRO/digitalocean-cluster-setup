@@ -77,4 +77,5 @@ releases:
     chart: src/kube-oidc-proxy/deploy/charts/kube-oidc-proxy
     missingFileHandler: Warn
     values:
+      - readenv.yaml.gotmpl
       - apps/kube-oidc-proxy/values.yaml.gotmpl

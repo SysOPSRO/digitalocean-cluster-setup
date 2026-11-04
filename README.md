@@ -52,8 +52,8 @@ export INGRESS_CLASS="nginx"
 export NODE_ARCH="amd64"
 export DEX_REPO="docker.io/mintel/dex-k8s-authenticator"
 export DEX_TAG="latest"
-export ZEROSSL_CA_PEM_FILE="../../certs/zerossl-ca.pem"
-export LETS_ENCRYPT_CA_PEM_FILE="../../certs/letsencrypt-ca.pem"
+export ZEROSSL_CA_PEM_FILE="certs/zerossl-ca.pem"
+export LETS_ENCRYPT_CA_PEM_FILE="certs/letsencrypt-ca.pem"
 ```
 
 4. Source the env file
