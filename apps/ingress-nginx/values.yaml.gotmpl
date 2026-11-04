@@ -1,0 +1,13 @@
+controller:
+  publishService:
+    enabled: true
+{{- if eq (env "OCI_INTERNAL_LB") "true" }}
+  service:
+    type: LoadBalancer
+    annotations:
+      service.beta.kubernetes.io/oci-load-balancer-internal: "true"
+{{- end }}
+{{- if env "EXISTING_WILDCARD_CERT_SECRET" }}
+  extraArgs:
+    default-ssl-certificate: "ingress-nginx/{{ env "EXISTING_WILDCARD_CERT_SECRET" }}"
+{{- end }}

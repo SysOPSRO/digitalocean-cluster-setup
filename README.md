@@ -35,6 +35,17 @@ export ZEROSSL_KID=""
 export RBAC_NAME=""
 #list of admins separated by space " "
 export RBAC_ADMIN_USERS=""
+# cert / dns / migration variables
+export CERT_PROVIDER="zerossl"
+export CERT_MANAGER_ENABLED="true"
+export EXISTING_WILDCARD_CERT_SECRET=""
+export OCI_INTERNAL_LB="false"
+export DNS_PROVIDER="aws"
+export DNS_ENDPOINT=""
+export DNS_SECRET_NAME="dns-credentials"
+export USE_EXTERNAL_SECRETS="true"
+export INSTALL_INGRESS_NGINX="true"
+export INGRESS_CLASS="nginx"
 ```
 
 4. Source the env file
@@ -88,3 +99,50 @@ dex               dex                     <none>   dex.cluster.domain.org       
 dex               dex-k8s-authenticator   <none>   login.cluster.domain.org       your.ip.addr.here   80, 443   5m
 kube-oidc-proxy   kube-oidc-proxy         <none>   oidcproxy.cluster.domain.org   your.ip.addr.here   80, 443   5m
 ```
+
+## Manual secrets (when not using external-secrets)
+
+If `USE_EXTERNAL_SECRETS=false`, create these secrets manually before `helm sync`.
+
+### DNS provider secret (cert-manager DNS-01)
+
+```sh
+# AWS Route53
+kubectl create secret generic dns-credentials -n cert-manager \
+  --from-literal=aws-secret-access-key=<AWS_SECRET_ACCESS_KEY>
+
+# Cloudflare
+kubectl create secret generic dns-credentials -n cert-manager \
+  --from-literal=cloudflare-api-token=<CF_API_TOKEN>
+
+# PowerDNS
+kubectl create secret generic dns-credentials -n cert-manager \
+  --from-literal=pdns-api-key=<PDNS_API_KEY>
+
+# Technitium
+kubectl create secret generic dns-credentials -n cert-manager \
+  --from-literal=technitium-token=<TECHNITIUM_TOKEN>
+```
+
+### Existing wildcard TLS certificate
+
+If `EXISTING_WILDCARD_CERT_SECRET` is set, create the TLS secret in the relevant namespaces:
+
+```sh
+kubectl create secret tls <SECRET_NAME> -n <NAMESPACE> \
+  --cert=path/to/fullchain.pem --key=path/to/privkey.pem
+```
+
+### OCI Vault credentials (only if USE_EXTERNAL_SECRETS=true)
+
+```sh
+kubectl create secret generic oci-credentials -n external-secrets \
+  --from-file=privateKey=path/to/oci_api_key.pem \
+  --from-literal=fingerprint=<OCI_API_KEY_FINGERPRINT>
+```
+
+### Notes for existing clusters
+
+- Set `INSTALL_INGRESS_NGINX=false` if ingress-nginx is already installed; set `INGRESS_CLASS` to match your existing ingress class (`nginx` or `nginx-internal`).
+- Set `CERT_MANAGER_ENABLED=false` if cert-manager is already installed.
+- external-dns and external-secrets are assumed already installed; this repo does not manage them.

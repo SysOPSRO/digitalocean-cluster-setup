@@ -20,9 +20,10 @@ releases:
     createNamespace: true
     chart: ingress-nginx/ingress-nginx
     version: 4.5.2
+    installed: {{ eq (env "INSTALL_INGRESS_NGINX") "true" }}
     missingFileHandler: Warn
     values:
-      - apps/ingress-nginx/values.yaml
+      - apps/ingress-nginx/values.yaml.gotmpl
     wait: true
     waitForJobs: true
 
@@ -31,6 +32,7 @@ releases:
     createNamespace: true
     chart: jetstack/cert-manager
     version: v1.11.0
+    installed: {{ eq (env "CERT_MANAGER_ENABLED") "true" }}
     missingFileHandler: Warn
     values:
       - apps/cert-manager/values.yaml
@@ -40,7 +42,7 @@ releases:
 
   - name: zerossl-issuer
     chart: apps/zerossl-issuer
-    installed: true
+    installed: {{ eq (env "CERT_MANAGER_ENABLED") "true" }}
     disableValidation: true
     values:
       - readenv.yaml.gotmpl

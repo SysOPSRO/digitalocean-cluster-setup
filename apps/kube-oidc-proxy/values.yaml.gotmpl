@@ -155,7 +155,11 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
     kubernetes.io/tls-acme: "true"
-    cert-manager.io/cluster-issuer: zerossl-prod
+{{- if env "EXISTING_WILDCARD_CERT_SECRET" }}
+    # using existing wildcard cert; no cert-manager issuer
+{{- else }}
+    cert-manager.io/cluster-issuer: {{ env "CERT_PROVIDER" }}-prod
+{{- end }}
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
@@ -172,7 +176,7 @@ ingress:
   # ingressClassName: ''
 
   tls:
-   - secretName: oidcproxy-tls
+   - secretName: {{ if env "EXISTING_WILDCARD_CERT_SECRET" }}{{ env "EXISTING_WILDCARD_CERT_SECRET" }}{{ else }}oidcproxy-tls{{ end }}
      hosts:
        - oidcproxy.{{ requiredEnv "CLUSTER_FQDN" }}
 

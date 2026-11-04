@@ -1,0 +1,46 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: prod-issuer
+spec:
+  acme:
+    email: {{ requiredEnv "ZEROSSL_EMAIL" }}
+    server: {{ if eq (env "CERT_PROVIDER") "zerossl" }}https://acme.zerossl.com/v2/DV90{{ else }}https://acme-v02.api.letsencrypt.org/directory{{ end }}
+    privateKeySecretRef:
+      name: prod-issuer-key
+    solvers:
+{{- if eq (env "DNS_PROVIDER") "aws" }}
+    - dns01:
+        route53:
+          region: eu-central-1
+          accessKeyID: {{ env "AWS_ACCESS_KEY_ID" }}
+          secretAccessKeySecretRef:
+            name: {{ env "DNS_SECRET_NAME" }}
+            key: aws-secret-access-key
+{{- else if eq (env "DNS_PROVIDER") "cloudflare" }}
+    - dns01:
+        cloudflare:
+          apiTokenSecretRef:
+            name: {{ env "DNS_SECRET_NAME" }}
+            key: cloudflare-api-token
+{{- else if eq (env "DNS_PROVIDER") "powerdns" }}
+    - dns01:
+        webhook:
+          groupName: acme.yourdomain.com
+          solverName: pdns
+          config:
+            host: {{ env "DNS_ENDPOINT" }}
+            apiKeySecretRef:
+              name: {{ env "DNS_SECRET_NAME" }}
+              key: pdns-api-key
+{{- else if eq (env "DNS_PROVIDER") "technitium" }}
+    - dns01:
+        webhook:
+          groupName: acme.yourdomain.com
+          solverName: technitium
+          config:
+            host: {{ env "DNS_ENDPOINT" }}
+            tokenSecretRef:
+              name: {{ env "DNS_SECRET_NAME" }}
+              key: technitium-token
+{{- end }}
