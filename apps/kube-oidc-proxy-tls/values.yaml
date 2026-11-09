@@ -1,0 +1,13 @@
+# Defaults; overridden by values.yaml.gotmpl (secret name from the env).
+secretName: kube-oidc-proxy-tls
+
+# SelfSigned issuer created next to the Certificate (namespaced, no CA needed:
+# the certificate is only used on the ingress-nginx -> pod hop, and nginx does
+# not verify upstream certificates by default).
+issuerName: kube-oidc-proxy-selfsigned
+
+duration: 8760h
+renewBefore: 720h
+
+# DNS names of the kube-oidc-proxy Service.
+serviceName: kube-oidc-proxy

@@ -1,1 +1,5 @@
-environments/
+environments/*
+!environments/*.env.example
+
+# helmfile output snapshots (may contain rendered secrets, e.g. clientSecret)
+helmfile-*/

@@ -1,6 +1,32 @@
+# =============================================================================
+# Cluster setup components (run through ./scripts/helmfile.sh)
+# =============================================================================
+#
+# SAFETY INVARIANTS — read before editing
+# -----------------------------------------------------------------------------
+# 1. NEVER use `installed: true|false` here.
+#    In helmfile `installed: false` means "uninstall the release", not "skip".
+#    The previous version gated ingress-nginx / cert-manager / zerossl-issuer
+#    with an `installed:` expression driven by env flags; running
+#    `helmfile sync` with one of those flags set to false (the normal case when
+#    the component is already installed, e.g. Terraform-owned on OCI) DELETED
+#    the release. Optional releases are now wrapped in a Go-template
+#    conditional so they are simply absent from the state when disabled.
+# 2. Use `apply` (or `diff`), never `sync`, never `destroy`/`delete`.
+#    scripts/helmfile.sh enforces this.
+# 3. Components that this repo installs *and* components that already exist in
+#    the cluster are both supported: disabling a flag here never removes
+#    anything.
+# 4. Chart `src/kube-oidc-proxy` is a git submodule (upstream); do not patch it.
+#    The TLS resources for it live in the local `apps/kube-oidc-proxy-tls` chart.
+# -----------------------------------------------------------------------------
+
 helmDefaults:
   atomic: true
   wait: true
+  waitForJobs: true
+  historyMax: 10
+  timeout: 600
 
 repositories:
   - name: ingress-nginx
@@ -15,42 +41,70 @@ repositories:
     url: https://charts.helm.sh/stable
 
 releases:
+  # ---------------------------------------------------------------------------
+  # ingress-nginx — installed only when INSTALL_INGRESS_NGINX=true. When it is
+  # already managed elsewhere (e.g. Terraform on OCI) leave the flag false: the
+  # release is absent from the state and nothing is uninstalled.
+  # ---------------------------------------------------------------------------
+{{- if eq (env "INSTALL_INGRESS_NGINX" | default "true") "true" }}
   - name: ingress-nginx
     namespace: ingress-nginx
     createNamespace: true
     chart: ingress-nginx/ingress-nginx
     version: 4.5.2
-    installed: {{ eq (env "INSTALL_INGRESS_NGINX") "true" }}
+    labels:
+      tier: baseline
     missingFileHandler: Warn
     values:
       - apps/ingress-nginx/values.yaml.gotmpl
     wait: true
     waitForJobs: true
+{{- end }}
 
+  # ---------------------------------------------------------------------------
+  # cert-manager — installed only when CERT_MANAGER_ENABLED=true. If the
+  # cluster already has cert-manager (any owner), set it false: the OIDC TLS
+  # below still uses it (its CRDs are detected at run time).
+  # ---------------------------------------------------------------------------
+{{- if eq (env "CERT_MANAGER_ENABLED" | default "false") "true" }}
   - name: cert-manager
     namespace: cert-manager
     createNamespace: true
     chart: jetstack/cert-manager
     version: v1.11.0
-    installed: {{ eq (env "CERT_MANAGER_ENABLED") "true" }}
+    labels:
+      tier: baseline
     missingFileHandler: Warn
     values:
       - apps/cert-manager/values.yaml
     wait: true
     waitForJobs: true
+{{- end }}
 
+  # ---------------------------------------------------------------------------
+  # zerossl-issuer — only when the environment really configures ZeroSSL
+  # (CERT_PROVIDER=zerossl + ZEROSSL_EAB + ZEROSSL_KID). Computed by
+  # scripts/helmfile.sh; when disabled the release is absent (no deletion).
+  # ---------------------------------------------------------------------------
+{{- if eq (env "ZEROSSL_ISSUER_ENABLED" | default "false") "true" }}
   - name: zerossl-issuer
     chart: apps/zerossl-issuer
-    installed: {{ eq (env "CERT_MANAGER_ENABLED") "true" }}
+    labels:
+      tier: baseline
     disableValidation: true
     values:
       - readenv.yaml.gotmpl
+{{- end }}
 
+  # ---------------------------------------------------------------------------
+  # OIDC identity stack
+  # ---------------------------------------------------------------------------
   - name: rbac-manager
     namespace: dex
     createNamespace: true
     chart: apps/rbac
-    installed: true
+    labels:
+      tier: identity
     disableValidation: false
     values:
       - readenv.yaml.gotmpl
@@ -59,6 +113,8 @@ releases:
     namespace: dex
     createNamespace: true
     chart: dex/dex
+    labels:
+      tier: identity
     hooks:
       - events: ["postupgrade", "postinstall"]
         showlogs: true
@@ -73,6 +129,8 @@ releases:
     namespace: dex
     createNamespace: true
     chart: skm/dex-k8s-authenticator
+    labels:
+      tier: identity
     hooks:
       - events: ["postupgrade", "postinstall"]
         showlogs: true
@@ -83,10 +141,46 @@ releases:
     values:
       - apps/dex-k8s-authenticator/values.yaml.gotmpl
 
+  # ---------------------------------------------------------------------------
+  # kube-oidc-proxy serving certificate (nginx -> pod hop).
+  # Present ONLY in `cert-manager` mode (KUBE_OIDC_PROXY_TLS_MODE, computed by
+  # scripts/helmfile.sh from KUBE_OIDC_PROXY_TLS_PROVIDER). In `adopt`/`chart`
+  # mode there is nothing here and the secret is reused/generated as before.
+  #
+  # `needs: cert-manager` is added only when this run also installs
+  # cert-manager, so the CRDs exist before the Certificate is submitted.
+  # ---------------------------------------------------------------------------
+{{- if eq (env "KUBE_OIDC_PROXY_TLS_MODE" | default "chart") "adopt" }}
+  # TLS mode "adopt": no release here. apps/kube-oidc-proxy/values.yaml.gotmpl
+  # sets tls.secretName so the existing kube-oidc-proxy-tls Secret is reused
+  # untouched (nothing is generated, rotated or owned by this state).
+{{- else if eq (env "KUBE_OIDC_PROXY_TLS_MODE" | default "chart") "chart" }}
+  # TLS mode "chart": no release here. The upstream chart generates its own
+  # self-signed certificate (new random one on every render).
+{{- else if eq (env "KUBE_OIDC_PROXY_TLS_MODE" | default "chart") "cert-manager" }}
+  - name: kube-oidc-proxy-tls
+    namespace: kube-oidc-proxy
+    createNamespace: true
+    chart: apps/kube-oidc-proxy-tls
+    labels:
+      tier: identity
+    values:
+      - apps/kube-oidc-proxy-tls/values.yaml.gotmpl
+{{- if eq (env "CERT_MANAGER_ENABLED" | default "false") "true" }}
+    needs:
+      # cross-namespace needs are written namespace/name
+      - cert-manager/cert-manager
+{{- end }}
+{{- else }}
+{{ fail (printf "unknown KUBE_OIDC_PROXY_TLS_MODE=%q (expected adopt|cert-manager|chart)" (env "KUBE_OIDC_PROXY_TLS_MODE")) }}
+{{- end }}
+
   - name: kube-oidc-proxy
     namespace: kube-oidc-proxy
     createNamespace: true
     chart: src/kube-oidc-proxy/deploy/charts/kube-oidc-proxy
+    labels:
+      tier: identity
     hooks:
       - events: ["postupgrade", "postinstall"]
         showlogs: true
@@ -95,3 +189,7 @@ releases:
     missingFileHandler: Warn
     values:
       - apps/kube-oidc-proxy/values.yaml.gotmpl
+{{- if eq (env "KUBE_OIDC_PROXY_TLS_MODE" | default "chart") "cert-manager" }}
+    needs:
+      - kube-oidc-proxy-tls
+{{- end }}

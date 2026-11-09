@@ -1,0 +1,8 @@
+apiVersion: v2
+name: kube-oidc-proxy-tls
+description: Serving certificate for kube-oidc-proxy, issued by the cluster's cert-manager.
+type: application
+
+version: 1.0.0
+
+appVersion: "1.0.0"

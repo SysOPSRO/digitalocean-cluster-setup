@@ -25,10 +25,24 @@ service:
   loadBalancerIP: ""
   loadBalancerSourceRanges: []
 
+{{- $tlsMode := env "KUBE_OIDC_PROXY_TLS_MODE" | default "chart" }}
 tls:
-  # `secretName` must be a name of Secret of TLS type. If not provided a
-  # self-signed certificate will get generated.
+{{- if eq $tlsMode "adopt" }}
+  # adopt (default): reuse the existing Secret byte-for-byte. The chart renders
+  # neither the Secret nor a Certificate, so nothing is regenerated or rotated.
+  secretName: {{ env "KUBE_OIDC_PROXY_SECRET_NAME" | default "kube-oidc-proxy-tls" }}
+{{- else if eq $tlsMode "cert-manager" }}
+  # cert-manager: the Secret is created/rotated by the Certificate from the
+  # local apps/kube-oidc-proxy-tls release (Issuer SelfSigned + Certificate).
+  secretName: {{ env "KUBE_OIDC_PROXY_SECRET_NAME" | default "kube-oidc-proxy-tls" }}
+{{- else if eq $tlsMode "chart" }}
+  # chart: upstream behaviour - a NEW self-signed certificate on every render
+  # (permanent helmfile diff + rotation on every apply). Use
+  # KUBE_OIDC_PROXY_TLS_PROVIDER=auto|adopt|cert-manager to avoid that.
   secretName:
+{{- else }}
+{{ fail (printf "unknown KUBE_OIDC_PROXY_TLS_MODE=%q (expected adopt|cert-manager|chart)" $tlsMode) }}
+{{- end }}
 
 # These values needs to be set in overrides in order to get kube-oidc-proxy
 # working.

@@ -1,0 +1,51 @@
+{{- /*
+Serving certificate for kube-oidc-proxy, issued by the cluster's cert-manager.
+
+Only rendered when scripts/helmfile.sh resolved
+KUBE_OIDC_PROXY_TLS_PROVIDER/KUBE_OIDC_PROXY_TLS_MODE to `cert-manager`.
+cert-manager may be pre-existing in the cluster or installed by this same
+helmfile run (the release carries `needs: [cert-manager]` in that case).
+
+SelfSigned is enough: the certificate is only used between ingress-nginx and
+the kube-oidc-proxy pod, and nginx does not verify upstream certificates by
+default. Clients validate the ingress certificate instead.
+*/ -}}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.issuerName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.serviceName }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .Values.secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.serviceName }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  secretName: {{ .Values.secretName }}
+  commonName: {{ .Values.serviceName }}.{{ .Release.Namespace }}.svc.cluster.local
+  dnsNames:
+    - {{ .Values.serviceName }}.{{ .Release.Namespace }}.svc
+    - {{ .Values.serviceName }}.{{ .Release.Namespace }}.svc.cluster.local
+  duration: {{ .Values.duration }}
+  renewBefore: {{ .Values.renewBefore }}
+  privateKey:
+    algorithm: RSA
+    size: 2048
+    rotationPolicy: Always
+  issuerRef:
+    group: cert-manager.io
+    kind: Issuer
+    name: {{ .Values.issuerName }}
+  usages:
+    - server auth

@@ -1,0 +1,8 @@
+# Values for the OIDC serving certificate. Consumed through helmfile's
+# `values:` mechanism; the secret name comes from the environment resolved by
+# scripts/helmfile.sh so it always matches what kube-oidc-proxy mounts.
+secretName: {{ env "KUBE_OIDC_PROXY_SECRET_NAME" | default "kube-oidc-proxy-tls" }}
+issuerName: kube-oidc-proxy-selfsigned
+duration: 8760h
+renewBefore: 720h
+serviceName: kube-oidc-proxy
