@@ -1,0 +1,44 @@
+{{- /*
+One wildcard Certificate per domain:
+  main domain  -> <prefix>-<domain>-tls
+  extra domain -> <prefix>-<domain>-tls (one Certificate each)
+
+Domains are NOT packed into a single certificate. Every secret carries the
+Reflector annotations, so the same certificate is available in all namespaces
+(or only in `reflectionNamespaces` when set).
+
+The default TLS secret used by ingress-nginx is the one for the main domain.
+*/ -}}
+{{- $prefix := .Values.secretPrefix | default "star" }}
+{{- $issuer := .Values.issuerName }}
+{{- $reflectionNamespaces := .Values.reflectionNamespaces }}
+{{- $domains := concat (list .Values.mainDomain) .Values.extraDomains }}
+{{- range $domain := $domains }}
+{{- $name := printf "%s-%s" $prefix (replace "." "-" $domain) }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: star-certificates
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+spec:
+  secretName: {{ $name }}-tls
+  issuerRef:
+    name: {{ $issuer }}
+    kind: ClusterIssuer
+    group: cert-manager.io
+  dnsNames:
+    - {{ $domain | quote }}
+    - {{ printf "*.%s" $domain | quote }}
+  secretTemplate:
+    annotations:
+      reflector.v1.k8s.emberstack.com/reflection-allowed: "true"
+      reflector.v1.k8s.emberstack.com/reflection-auto-enabled: "true"
+{{- if $reflectionNamespaces }}
+      reflector.v1.k8s.emberstack.com/reflection-allowed-namespaces: {{ $reflectionNamespaces | quote }}
+      reflector.v1.k8s.emberstack.com/reflection-auto-namespaces: {{ $reflectionNamespaces | quote }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,41 @@
+issuerName: prod-issuer
+server: https://acme-v02.api.letsencrypt.org/directory
+email: ""
+privateKeySecretRef: prod-issuer-key
+dnsZones: []
+
+# ACME external account binding (required by ZeroSSL). The chart creates this
+# Secret itself, named <issuerName>-eab, so it never collides with the
+# dedicated zerossl-issuer chart.
+eabEnabled: false
+eabSecretName: prod-issuer-eab
+eabKeyID: ""
+eabSecret: ""
+
+# aws | oci | cloudflare | powerdns | technitium
+provider: aws
+secretName: dns-credentials
+
+# aws
+awsRegion: eu-central-1
+awsAccessKeyIdKey: aws-access-key-id
+awsSecretAccessKeyKey: aws-secret-access-key
+
+# cloudflare
+cloudflareApiTokenKey: cloudflare-api-token
+
+# powerdns / technitium (webhook solvers)
+powerdnsGroupName: acme.sysops.ro
+powerdnsSolverName: pdns
+powerdnsHost: ""
+powerdnsApiKeyKey: pdns-api-key
+technitiumGroupName: acme.sysops.ro
+technitiumSolverName: technitium
+technitiumHost: ""
+technitiumTokenKey: technitium-token
+
+# oci (requires cert-manager-webhook-oci, installed outside this chart)
+ociWebhookGroup: acme.sysops.ro
+ociWebhookSolverName: oci
+ociCompartmentOcid: ""
+ociProfileSecretName: ""

@@ -1,0 +1,8 @@
+apiVersion: v2
+name: cert-manager-issuer
+description: Let's Encrypt / ZeroSSL ClusterIssuer with a DNS-01 solver for the configured DNS provider.
+type: application
+
+version: 1.0.0
+
+appVersion: "1.0.0"

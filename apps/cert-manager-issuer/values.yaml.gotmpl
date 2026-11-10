@@ -1,0 +1,39 @@
+{{- $issuer := env "CERT_MANAGER_ISSUER_NAME" | default "prod-issuer" }}
+{{- $zerossl := eq (env "CERT_PROVIDER") "zerossl" }}
+{{- $eab := env "ZEROSSL_EAB" }}
+{{- $kid := env "ZEROSSL_KID" }}
+{{- if and $zerossl (or (eq $eab "") (eq $kid "")) }}
+{{- fail "CERT_PROVIDER=zerossl requires ZEROSSL_EAB and ZEROSSL_KID (ACME external account binding); ZeroSSL cannot register an account without them" }}
+{{- end }}
+issuerName: {{ $issuer }}
+server: {{ if $zerossl }}https://acme.zerossl.com/v2/DV90{{ else }}https://acme-v02.api.letsencrypt.org/directory{{ end }}
+email: {{ requiredEnv "ACME_EMAIL" }}
+privateKeySecretRef: {{ $issuer }}-key
+eabEnabled: {{ $zerossl }}
+eabSecretName: {{ $issuer }}-eab
+eabKeyID: {{ $kid | quote }}
+eabSecret: {{ $eab | quote }}
+dnsZones:
+{{- range (env "DNS_ZONES" | default "" | splitList " ") }}
+{{- if . }}
+  - {{ . | quote }}
+{{- end }}
+{{- end }}
+provider: {{ env "DNS_PROVIDER" | default "aws" }}
+secretName: {{ env "DNS_SECRET_NAME" | default "dns-credentials" }}
+awsRegion: {{ env "AWS_REGION" | default (env "ROUTE53_REGION" | default "eu-central-1") }}
+awsAccessKeyIdKey: {{ env "DNS_AWS_ACCESS_KEY_ID_KEY" | default "aws-access-key-id" }}
+awsSecretAccessKeyKey: {{ env "DNS_AWS_SECRET_ACCESS_KEY_KEY" | default "aws-secret-access-key" }}
+cloudflareApiTokenKey: {{ env "DNS_CLOUDFLARE_TOKEN_KEY" | default "cloudflare-api-token" }}
+powerdnsGroupName: {{ env "DNS_POWERDNS_GROUP" | default "acme.sysops.ro" }}
+powerdnsSolverName: {{ env "DNS_POWERDNS_SOLVER" | default "pdns" }}
+powerdnsHost: {{ env "DNS_ENDPOINT" }}
+powerdnsApiKeyKey: {{ env "DNS_POWERDNS_KEY" | default "pdns-api-key" }}
+technitiumGroupName: {{ env "DNS_TECHNITIUM_GROUP" | default "acme.sysops.ro" }}
+technitiumSolverName: {{ env "DNS_TECHNITIUM_SOLVER" | default "technitium" }}
+technitiumHost: {{ env "DNS_ENDPOINT" }}
+technitiumTokenKey: {{ env "DNS_TECHNITIUM_TOKEN_KEY" | default "technitium-token" }}
+ociWebhookGroup: {{ env "OCI_DNS_WEBHOOK_GROUP" | default "acme.sysops.ro" }}
+ociWebhookSolverName: {{ env "OCI_DNS_WEBHOOK_SOLVER" | default "oci" }}
+ociCompartmentOcid: {{ env "OCI_DNS_COMPARTMENT_OCID" }}
+ociProfileSecretName: {{ env "OCI_DNS_PROFILE_SECRET_NAME" }}

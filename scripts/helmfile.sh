@@ -279,6 +279,153 @@ case "$requested_tls" in
 esac
 export KUBE_OIDC_PROXY_TLS_MODE
 
+# ------------------------------------------------------------------ ingress --
+# Optional: no default. With no value the chart deploys the Service with the
+# cloud default type and NO provider annotations.
+export LB_PROVIDER="${LB_PROVIDER:-}"
+if [[ -n "$LB_PROVIDER" ]]; then
+  case "$LB_PROVIDER" in
+    aws|oci|hetzner|digitalocean|contabo|metal) ;;
+    *) die "LB_PROVIDER must be aws|oci|hetzner|digitalocean|contabo|metal (got '$LB_PROVIDER')" ;;
+  esac
+else
+  echo "WARN: LB_PROVIDER is empty — no load-balancer annotations will be added." >&2
+fi
+
+# OCI_INTERNAL_LB was replaced by LB_PROVIDER + the internal release.
+if [[ -n "${OCI_INTERNAL_LB:-}" ]]; then
+  echo "WARN: OCI_INTERNAL_LB is no longer used; set LB_PROVIDER=oci instead." >&2
+fi
+
+# The internal controller follows the public switch unless set explicitly.
+export INSTALL_INGRESS_NGINX_INTERNAL="${INSTALL_INGRESS_NGINX_INTERNAL:-${INSTALL_INGRESS_NGINX:-true}}"
+case "$INSTALL_INGRESS_NGINX_INTERNAL" in
+  true|false) ;;
+  *) die "INSTALL_INGRESS_NGINX_INTERNAL must be true or false (got '$INSTALL_INGRESS_NGINX_INTERNAL')" ;;
+esac
+
+# Public controller: DaemonSet by default; setting INGRESS_REPLICAS forces a
+# Deployment with that replica count (DaemonSet ignores replicaCount).
+export INGRESS_CONTROLLER_KIND="${INGRESS_CONTROLLER_KIND:-DaemonSet}"
+if [[ -n "${INGRESS_REPLICAS:-}" ]]; then
+  INGRESS_CONTROLLER_KIND=Deployment
+fi
+export INGRESS_CONTROLLER_KIND
+case "$INGRESS_CONTROLLER_KIND" in
+  DaemonSet|Deployment) ;;
+  *) die "INGRESS_CONTROLLER_KIND must be DaemonSet or Deployment (got '$INGRESS_CONTROLLER_KIND')" ;;
+esac
+export INGRESS_REPLICAS="${INGRESS_REPLICAS:-1}"
+export INTERNAL_INGRESS_REPLICAS="${INTERNAL_INGRESS_REPLICAS:-2}"
+
+# OCI needs an explicit subnet for each NLB (public) / LB (internal).
+if [[ "${INSTALL_INGRESS_NGINX:-true}" == "true" && "$LB_PROVIDER" == "oci" && -z "${PUBLIC_LB_SUBNET_OCID:-}" ]]; then
+  die "INSTALL_INGRESS_NGINX=true with LB_PROVIDER=oci requires PUBLIC_LB_SUBNET_OCID"
+fi
+if [[ "$INSTALL_INGRESS_NGINX_INTERNAL" == "true" && "$LB_PROVIDER" == "oci" && -z "${INTERNAL_LB_SUBNET_OCID:-}" ]]; then
+  die "INSTALL_INGRESS_NGINX_INTERNAL=true with LB_PROVIDER=oci requires INTERNAL_LB_SUBNET_OCID"
+fi
+
+# ServiceMonitor: `auto` (default) enables it only when the Prometheus
+# operator CRDs are installed, so `helm apply` cannot fail on a missing CRD.
+if [[ "${INGRESS_METRICS_SERVICEMONITOR:-auto}" == "auto" ]]; then
+  if [[ "$cluster_reachable" == "true" ]] && kubectl get crd servicemonitors.monitoring.coreos.com >/dev/null 2>&1; then
+    INGRESS_METRICS_SERVICEMONITOR=true
+  else
+    INGRESS_METRICS_SERVICEMONITOR=false
+  fi
+fi
+export INGRESS_METRICS_SERVICEMONITOR
+case "$INGRESS_METRICS_SERVICEMONITOR" in
+  true|false) ;;
+  *) die "INGRESS_METRICS_SERVICEMONITOR must be auto, true or false" ;;
+esac
+
+# ---------------------------------------------------------------------- dns --
+export DNS_PROVIDER="${DNS_PROVIDER:-aws}"
+case "$DNS_PROVIDER" in
+  aws|oci|cloudflare|powerdns|technitium) ;;
+  *) die "DNS_PROVIDER must be aws|oci|cloudflare|powerdns|technitium (got '$DNS_PROVIDER')" ;;
+esac
+
+# ClusterIssuer: `auto` (default) creates it only when cert-manager CRDs exist.
+if [[ "${CERT_MANAGER_ISSUER_ENABLED:-auto}" == "auto" ]]; then
+  if cert_manager_crds; then
+    CERT_MANAGER_ISSUER_ENABLED=true
+  else
+    CERT_MANAGER_ISSUER_ENABLED=false
+  fi
+fi
+export CERT_MANAGER_ISSUER_ENABLED
+case "$CERT_MANAGER_ISSUER_ENABLED" in
+  true|false) ;;
+  *) die "CERT_MANAGER_ISSUER_ENABLED must be auto, true or false" ;;
+esac
+
+if [[ "$CERT_MANAGER_ISSUER_ENABLED" == "true" ]]; then
+  # The issuer chart renders `email` with requiredEnv; fail early and clearly.
+  [[ -n "${ACME_EMAIL:-}" ]] || die "ACME_EMAIL is required when the cert-manager ClusterIssuer is enabled (used for both Let's Encrypt and ZeroSSL)"
+  if [[ "$CERT_PROVIDER" == "zerossl" ]]; then
+    [[ -n "${ZEROSSL_EAB:-}" && -n "${ZEROSSL_KID:-}" ]] || die "CERT_PROVIDER=zerossl requires ZEROSSL_EAB and ZEROSSL_KID (ZeroSSL cannot register an ACME account without external account binding)"
+  fi
+fi
+
+# ---------------------------------------------------------- star certificates --
+# STAR_MAIN_DOMAIN drives the default: a wildcard Certificate per domain
+# (main + STAR_EXTRA_DOMAINS), mirrored to all namespaces by Reflector.
+if [[ "${INSTALL_STAR_CERT:-auto}" == "auto" ]]; then
+  if [[ -n "${STAR_MAIN_DOMAIN:-}" ]]; then
+    INSTALL_STAR_CERT=true
+  else
+    INSTALL_STAR_CERT=false
+  fi
+fi
+export INSTALL_STAR_CERT
+case "$INSTALL_STAR_CERT" in
+  true|false) ;;
+  *) die "INSTALL_STAR_CERT must be auto, true or false" ;;
+esac
+
+if [[ "${INSTALL_REFLECTOR:-auto}" == "auto" ]]; then
+  if [[ "$INSTALL_STAR_CERT" == "true" ]]; then
+    INSTALL_REFLECTOR=true
+  else
+    INSTALL_REFLECTOR=false
+  fi
+fi
+export INSTALL_REFLECTOR
+
+if [[ "$INSTALL_STAR_CERT" == "true" ]]; then
+  [[ -n "${STAR_MAIN_DOMAIN:-}" ]] || die "INSTALL_STAR_CERT=true requires STAR_MAIN_DOMAIN"
+  [[ "$CERT_MANAGER_ISSUER_ENABLED" == "true" ]] || die "INSTALL_STAR_CERT=true requires the cert-manager ClusterIssuer (CERT_MANAGER_ISSUER_ENABLED=true/auto with cert-manager CRDs)"
+  [[ "$INSTALL_REFLECTOR" == "true" ]] || die "INSTALL_STAR_CERT=true requires INSTALL_REFLECTOR=true"
+fi
+
+# ---------------------------------------------------------- external secrets --
+export ENABLE_EXTERNAL_SECRETS="${ENABLE_EXTERNAL_SECRETS:-false}"
+case "$ENABLE_EXTERNAL_SECRETS" in
+  true|false) ;;
+  *) die "ENABLE_EXTERNAL_SECRETS must be true or false" ;;
+esac
+if [[ "$ENABLE_EXTERNAL_SECRETS" == "true" ]]; then
+  export EXTERNAL_SECRETS_PROVIDER="${EXTERNAL_SECRETS_PROVIDER:-oci}"
+  case "$EXTERNAL_SECRETS_PROVIDER" in
+    oci)
+      for v in OCI_VAULT_OCID OCI_VAULT_REGION OCI_VAULT_USER_OCID OCI_VAULT_TENANCY_OCID; do
+        [[ -n "${!v:-}" ]] || die "$v is required for EXTERNAL_SECRETS_PROVIDER=oci"
+      done
+      ;;
+    aws)
+      [[ -n "${AWS_SECRETS_REGION:-${AWS_REGION:-}}" ]] || die "AWS_SECRETS_REGION (or AWS_REGION) is required for EXTERNAL_SECRETS_PROVIDER=aws"
+      auth="${EXTERNAL_SECRETS_AWS_AUTH:-secretRef}"
+      case "$auth" in secretRef|jwt) ;; *) die "EXTERNAL_SECRETS_AWS_AUTH must be secretRef or jwt" ;; esac
+      ;;
+    *)
+      die "EXTERNAL_SECRETS_PROVIDER must be oci or aws (got '$EXTERNAL_SECRETS_PROVIDER')"
+      ;;
+  esac
+fi
+
 # ------------------------------------------------------------------- report --
 echo "helmfile:"
 echo "  env file       : $ENV_FILE"
@@ -286,8 +433,15 @@ echo "  kubeconfig     : ${KUBECONFIG:-<none>}"
 echo "  context        : ${current_context:-<not reachable / not set>}"
 echo "  selector       : ${SELECTOR:-<none>}"
 echo "  action         : $ACTION"
-echo "  ingress-nginx  : $([[ "${INSTALL_INGRESS_NGINX:-true}" == "true" ]] && echo install || echo skip)"
+echo "  LB_PROVIDER    : ${LB_PROVIDER:-<none>}"
+echo "  ingress-nginx  : $([[ "${INSTALL_INGRESS_NGINX:-true}" == "true" ]] && echo install || echo skip) (kind=$INGRESS_CONTROLLER_KIND replicas=$INGRESS_REPLICAS)"
+echo "  nginx-internal : $INSTALL_INGRESS_NGINX_INTERNAL (kind=Deployment replicas=$INTERNAL_INGRESS_REPLICAS)"
+echo "  servicemonitor : $INGRESS_METRICS_SERVICEMONITOR"
 echo "  cert-manager   : $([[ "${CERT_MANAGER_ENABLED:-false}" == "true" ]] && echo install || echo skip) (existing CRDs: $(cert_manager_crds && echo yes || echo no))"
+echo "  dns provider   : $DNS_PROVIDER (clusterissuer: $CERT_MANAGER_ISSUER_ENABLED)"
+echo "  star cert      : $INSTALL_STAR_CERT (main=${STAR_MAIN_DOMAIN:-<unset>} extras='${STAR_EXTRA_DOMAINS:-}')"
+echo "  reflector      : $INSTALL_REFLECTOR"
+echo "  ext. secrets   : $ENABLE_EXTERNAL_SECRETS${ENABLE_EXTERNAL_SECRETS:+ (${EXTERNAL_SECRETS_PROVIDER:-oci})}"
 echo "  zerossl-issuer : $ZEROSSL_ISSUER_ENABLED (CERT_PROVIDER=$CERT_PROVIDER)"
 echo "  oidc-proxy TLS : $KUBE_OIDC_PROXY_TLS_MODE (requested: $requested_tls)"
 

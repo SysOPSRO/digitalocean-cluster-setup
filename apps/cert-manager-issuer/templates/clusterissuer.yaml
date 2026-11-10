@@ -1,0 +1,75 @@
+{{- /*
+ClusterIssuer with a DNS-01 solver for the provider selected in DNS_PROVIDER.
+cert-manager must already be installed (by this repo or by anything else):
+this chart only consumes its CRDs.
+*/ -}}
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: {{ .Values.issuerName }}
+spec:
+  acme:
+    email: {{ required "email (ZEROSSL_EMAIL) is required" .Values.email }}
+    server: {{ .Values.server }}
+    privateKeySecretRef:
+      name: {{ .Values.privateKeySecretRef }}
+{{- if .Values.eabEnabled }}
+    externalAccountBinding:
+      keyID: {{ .Values.eabKeyID | quote }}
+      keySecretRef:
+        name: {{ .Values.eabSecretName }}
+        key: secret
+{{- end }}
+    solvers:
+      - dns01:
+{{- if eq .Values.provider "aws" }}
+          route53:
+            region: {{ .Values.awsRegion }}
+            accessKeyIDSecretRef:
+              name: {{ .Values.secretName }}
+              key: {{ .Values.awsAccessKeyIdKey }}
+            secretAccessKeySecretRef:
+              name: {{ .Values.secretName }}
+              key: {{ .Values.awsSecretAccessKeyKey }}
+{{- else if eq .Values.provider "cloudflare" }}
+          cloudflare:
+            apiTokenSecretRef:
+              name: {{ .Values.secretName }}
+              key: {{ .Values.cloudflareApiTokenKey }}
+{{- else if eq .Values.provider "powerdns" }}
+          webhook:
+            groupName: {{ .Values.powerdnsGroupName }}
+            solverName: {{ .Values.powerdnsSolverName }}
+            config:
+              host: {{ required "DNS_ENDPOINT is required for powerdns" .Values.powerdnsHost | quote }}
+              apiKeySecretRef:
+                name: {{ .Values.secretName }}
+                key: {{ .Values.powerdnsApiKeyKey }}
+{{- else if eq .Values.provider "technitium" }}
+          webhook:
+            groupName: {{ .Values.technitiumGroupName }}
+            solverName: {{ .Values.technitiumSolverName }}
+            config:
+              host: {{ required "DNS_ENDPOINT is required for technitium" .Values.technitiumHost | quote }}
+              tokenSecretRef:
+                name: {{ .Values.secretName }}
+                key: {{ .Values.technitiumTokenKey }}
+{{- else if eq .Values.provider "oci" }}
+          webhook:
+            groupName: {{ .Values.ociWebhookGroup }}
+            solverName: {{ .Values.ociWebhookSolverName }}
+            config:
+              compartmentOCID: {{ required "OCI_DNS_COMPARTMENT_OCID is required for DNS_PROVIDER=oci" .Values.ociCompartmentOcid | quote }}
+{{- if .Values.ociProfileSecretName }}
+              ociProfileSecretName: {{ .Values.ociProfileSecretName | quote }}
+{{- end }}
+{{- else }}
+{{ fail (printf "unknown DNS_PROVIDER=%q (expected aws|oci|cloudflare|powerdns|technitium)" .Values.provider) }}
+{{- end }}
+{{- if .Values.dnsZones }}
+        selector:
+          dnsZones:
+{{- range .Values.dnsZones }}
+            - {{ . | quote }}
+{{- end }}
+{{- end }}

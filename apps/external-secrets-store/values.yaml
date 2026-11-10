@@ -1,0 +1,19 @@
+# oci | aws
+provider: oci
+storeName: oci-vault-store
+
+# OCI Vault (API key auth; the credentials live in a Secret you create)
+ociVaultOcid: ""
+ociVaultRegion: ""
+ociUserOcid: ""
+ociTenancyOcid: ""
+ociAuthSecretName: oci-credentials
+
+# AWS Secrets Manager
+awsRegion: ""
+awsAuthMethod: secretRef   # secretRef | jwt (IRSA / EKS Pod Identity)
+awsAuthSecretName: aws-credentials
+awsAccessKeyIdKey: access-key-id
+awsSecretAccessKeyKey: secret-access-key
+awsServiceAccountName: external-secrets
+awsServiceAccountNamespace: external-secrets

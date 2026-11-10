@@ -1,0 +1,117 @@
+{{- /*
+Private (internal) ingress-nginx.
+
+Separate release/namespace so it can expose an internal load balancer without
+touching the public controller:
+  release   nginx-internal
+  namespace ingress-nginx-internal
+  class     nginx-internal (non-default, by name)
+
+Always a Deployment (INTERNAL_INGRESS_REPLICAS, default 2) with
+externalTrafficPolicy: Cluster, because internal traffic is low and there is
+no need for one pod per node.
+
+Provider behaviour (LB_PROVIDER):
+  (unset)      -> NodePort, no annotations (cloud default, internal-safe)
+  aws          -> internal NLB (aws-load-balancer-internal + scheme internal)
+  oci          -> classic internal LB (subnet + flexible shape, from annotations)
+  hetzner      -> NodePort by default; LoadBalancer + use-private-ip when
+                  HETZNER_INTERNAL_LB=true
+  digitalocean -> NodePort (DO has no private load balancer)
+  contabo/metal-> NodePort (MetalLB support comes separately)
+*/ -}}
+{{- $lb := env "LB_PROVIDER" | default "" }}
+{{- $class := env "INGRESS_INTERNAL_CLASS" | default "nginx-internal" }}
+{{- $replicas := env "INTERNAL_INGRESS_REPLICAS" | default "2" }}
+{{- $sm := eq (env "INGRESS_METRICS_SERVICEMONITOR" | default "false") "true" }}
+
+{{- $serviceType := "NodePort" }}
+{{- $annotations := dict }}
+{{- if eq $lb "" }}
+{{- /* no provider: NodePort, no annotations */ -}}
+{{- else if eq $lb "aws" }}
+{{- $serviceType = "LoadBalancer" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/aws-load-balancer-type" "nlb" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/aws-load-balancer-scheme" "internal" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/aws-load-balancer-internal" "true" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled" "true" }}
+{{- if env "AWS_LB_TAGS" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags" (env "AWS_LB_TAGS") }}
+{{- end }}
+{{- else if eq $lb "oci" }}
+{{- $serviceType = "LoadBalancer" }}
+{{- $_ := set $annotations "oci.oraclecloud.com/load-balancer-type" "lb" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/oci-load-balancer-internal" "true" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/oci-load-balancer-shape" "flexible" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/oci-load-balancer-shape-flex-min" (env "INTERNAL_LB_SHAPE_MIN" | default "10") }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/oci-load-balancer-shape-flex-max" (env "INTERNAL_LB_SHAPE_MAX" | default "100") }}
+{{- if env "INTERNAL_LB_SUBNET_OCID" }}
+{{- $_ := set $annotations "service.beta.kubernetes.io/oci-load-balancer-subnet1" (env "INTERNAL_LB_SUBNET_OCID") }}
+{{- else }}
+{{ fail "LB_PROVIDER=oci requires INTERNAL_LB_SUBNET_OCID for the internal controller" }}
+{{- end }}
+{{- else if eq $lb "hetzner" }}
+{{- if eq (env "HETZNER_INTERNAL_LB" | default "false") "true" }}
+{{- $serviceType = "LoadBalancer" }}
+{{- $_ := set $annotations "load-balancer.hetzner.cloud/type" (env "HETZNER_LB_TYPE" | default "lb11") }}
+{{- $_ := set $annotations "load-balancer.hetzner.cloud/use-private-ip" "true" }}
+{{- if env "HETZNER_INTERNAL_LB_NAME" }}
+{{- $_ := set $annotations "load-balancer.hetzner.cloud/name" (env "HETZNER_INTERNAL_LB_NAME") }}
+{{- end }}
+{{- if env "HETZNER_LB_LOCATION" }}
+{{- $_ := set $annotations "load-balancer.hetzner.cloud/location" (env "HETZNER_LB_LOCATION") }}
+{{- end }}
+{{- end }}
+{{- else if or (eq $lb "digitalocean") (eq $lb "contabo") (eq $lb "metal") }}
+{{- /* NodePort only */ -}}
+{{- else }}
+{{ fail (printf "unknown LB_PROVIDER=%q (expected aws|oci|hetzner|digitalocean|contabo|metal)" $lb) }}
+{{- end }}
+
+{{- /* extraArgs: pinned Ingress status + optional default TLS secret */ -}}
+{{- $extraArgs := dict }}
+{{- if env "INTERNAL_LB_PUBLISH_STATUS_ADDRESS" }}
+{{- $_ := set $extraArgs "publish-status-address" (env "INTERNAL_LB_PUBLISH_STATUS_ADDRESS") }}
+{{- end }}
+{{- if and (eq (env "INSTALL_STAR_CERT" | default "false") "true") (env "STAR_MAIN_DOMAIN") }}
+{{- $_ := set $extraArgs "default-ssl-certificate" (printf "ingress-nginx-internal/star-%s-tls" (replace "." "-" (env "STAR_MAIN_DOMAIN"))) }}
+{{- end }}
+
+controller:
+  kind: Deployment
+  replicaCount: {{ $replicas }}
+  ingressClass: {{ $class }}
+  ingressClassByName: true
+  ingressClassResource:
+    name: {{ $class }}
+    enabled: true
+    default: false
+    controllerValue: k8s.io/ingress-nginx-internal
+  config:
+    allow-snippet-annotations: "true"
+    client-header-buffer-size: 100k
+    large-client-header-buffers: 4 100k
+  service:
+    type: {{ $serviceType }}
+    externalTrafficPolicy: Cluster
+{{- if gt (len $annotations) 0 }}
+    annotations:
+{{ toYaml $annotations | nindent 6 }}
+{{- end }}
+  metrics:
+    enabled: {{ $sm }}
+    serviceMonitor:
+      enabled: {{ $sm }}
+{{- if gt (len $extraArgs) 0 }}
+  extraArgs:
+{{ toYaml $extraArgs | nindent 4 }}
+{{- end }}
+{{- if env "INTERNAL_LB_PUBLISH_STATUS_ADDRESS" }}
+  publishService:
+    enabled: false
+{{- end }}
+  admissionWebhooks:
+    failurePolicy: {{ env "INGRESS_WEBHOOK_FAILURE_POLICY" | default "Fail" }}
+
+defaultBackend:
+  enabled: false

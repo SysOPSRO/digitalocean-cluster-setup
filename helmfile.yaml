@@ -39,24 +39,47 @@ repositories:
     url: https://charts.sagikazarmark.dev
   - name: stable
     url: https://charts.helm.sh/stable
+  - name: emberstack
+    url: https://emberstack.github.io/helm-charts
 
 releases:
   # ---------------------------------------------------------------------------
-  # ingress-nginx — installed only when INSTALL_INGRESS_NGINX=true. When it is
-  # already managed elsewhere (e.g. Terraform on OCI) leave the flag false: the
-  # release is absent from the state and nothing is uninstalled.
+  # ingress-nginx (public) — installed only when INSTALL_INGRESS_NGINX=true.
+  # When it is already managed elsewhere (e.g. Terraform on OCI) leave the flag
+  # false: the release is absent from the state and nothing is uninstalled.
   # ---------------------------------------------------------------------------
 {{- if eq (env "INSTALL_INGRESS_NGINX" | default "true") "true" }}
   - name: ingress-nginx
     namespace: ingress-nginx
     createNamespace: true
     chart: ingress-nginx/ingress-nginx
-    version: 4.5.2
+    version: 4.10.0
     labels:
       tier: baseline
     missingFileHandler: Warn
     values:
       - apps/ingress-nginx/values.yaml.gotmpl
+    wait: true
+    waitForJobs: true
+{{- end }}
+
+  # ---------------------------------------------------------------------------
+  # nginx-internal (private) — separate controller/namespace/IngressClass.
+  # Defaults to the INSTALL_INGRESS_NGINX value (scripts/helmfile.sh exports
+  # INSTALL_INGRESS_NGINX_INTERNAL). NodePort unless the provider supports an
+  # internal LB (aws, oci, hetzner with HETZNER_INTERNAL_LB=true).
+  # ---------------------------------------------------------------------------
+{{- if eq (env "INSTALL_INGRESS_NGINX_INTERNAL" | default (env "INSTALL_INGRESS_NGINX" | default "true")) "true" }}
+  - name: nginx-internal
+    namespace: ingress-nginx-internal
+    createNamespace: true
+    chart: ingress-nginx/ingress-nginx
+    version: 4.10.0
+    labels:
+      tier: baseline
+    missingFileHandler: Warn
+    values:
+      - apps/ingress-nginx-internal/values.yaml.gotmpl
     wait: true
     waitForJobs: true
 {{- end }}
@@ -94,6 +117,77 @@ releases:
     disableValidation: true
     values:
       - readenv.yaml.gotmpl
+{{- end }}
+
+  # ---------------------------------------------------------------------------
+  # cert-manager-issuer — ClusterIssuer with a DNS-01 solver for DNS_PROVIDER
+  # (aws | oci | cloudflare | powerdns | technitium). Consumes an EXISTING
+  # cert-manager (installed here or elsewhere); CERT_MANAGER_ISSUER_ENABLED is
+  # resolved by scripts/helmfile.sh (auto: true when the CRDs exist).
+  # ---------------------------------------------------------------------------
+{{- if eq (env "CERT_MANAGER_ISSUER_ENABLED" | default "false") "true" }}
+  - name: cert-manager-issuer
+    namespace: cert-manager
+    createNamespace: true
+    chart: apps/cert-manager-issuer
+    labels:
+      tier: baseline
+    values:
+      - apps/cert-manager-issuer/values.yaml.gotmpl
+{{- if eq (env "CERT_MANAGER_ENABLED" | default "false") "true" }}
+    needs:
+      - cert-manager/cert-manager
+{{- end }}
+{{- end }}
+
+  # ---------------------------------------------------------------------------
+  # reflector — mirrors Secrets marked with the reflector.v1 annotations into
+  # the other namespaces (used by star-certificates). Only installed when
+  # INSTALL_REFLECTOR=true (scripts/helmfile.sh sets it automatically when the
+  # star certificates are enabled, unless already present).
+  # ---------------------------------------------------------------------------
+{{- if eq (env "INSTALL_REFLECTOR" | default "false") "true" }}
+  - name: reflector
+    namespace: reflector
+    createNamespace: true
+    chart: emberstack/reflector
+    version: 10.0.70
+    labels:
+      tier: baseline
+{{- end }}
+
+  # ---------------------------------------------------------------------------
+  # star-certificates — one wildcard Certificate per domain (main + extras),
+  # signed by the DNS-01 ClusterIssuer and mirrored by Reflector.
+  # ---------------------------------------------------------------------------
+{{- if eq (env "INSTALL_STAR_CERT" | default "false") "true" }}
+  - name: star-certificates
+    namespace: cert-manager
+    chart: apps/star-certificates
+    labels:
+      tier: baseline
+    values:
+      - apps/star-certificates/values.yaml.gotmpl
+    needs:
+      - cert-manager-issuer
+      # cross-namespace needs are written namespace/name
+      - reflector/reflector
+{{- end }}
+
+  # ---------------------------------------------------------------------------
+  # external-secrets-store — ClusterSecretStore for the External Secrets
+  # Operator (OCI Vault or AWS Secrets Manager). The operator/CRDs are assumed
+  # to be installed outside this repo.
+  # ---------------------------------------------------------------------------
+{{- if eq (env "ENABLE_EXTERNAL_SECRETS" | default "false") "true" }}
+  - name: external-secrets-store
+    namespace: external-secrets
+    createNamespace: true
+    chart: apps/external-secrets-store
+    labels:
+      tier: baseline
+    values:
+      - apps/external-secrets-store/values.yaml.gotmpl
 {{- end }}
 
   # ---------------------------------------------------------------------------

@@ -1,0 +1,14 @@
+# One Certificate per domain (the main domain plus every extra domain), each
+# covering "<domain>" and "*.<domain>".
+mainDomain: ""
+extraDomains: []
+
+# DNS-01 ClusterIssuer that signs them.
+issuerName: prod-issuer
+
+# Reflector: empty = mirror the secret into every namespace. A space separated
+# list restricts both the allow-list and auto-reflection to those namespaces.
+reflectionNamespaces: ""
+
+# Secret name prefix; the secret for a domain is "<prefix>-<domain-with-dashes>-tls".
+secretPrefix: star

@@ -1,0 +1,11 @@
+{{- $main := env "STAR_MAIN_DOMAIN" }}
+mainDomain: {{ requiredEnv "STAR_MAIN_DOMAIN" | quote }}
+extraDomains:
+{{- range (env "STAR_EXTRA_DOMAINS" | default "" | splitList " ") }}
+{{- if . }}
+  - {{ . | quote }}
+{{- end }}
+{{- end }}
+issuerName: {{ env "CERT_MANAGER_ISSUER_NAME" | default "prod-issuer" | quote }}
+reflectionNamespaces: {{ env "STAR_CERT_NAMESPACES" | default "" | quote }}
+secretPrefix: star

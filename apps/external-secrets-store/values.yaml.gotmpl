@@ -1,0 +1,15 @@
+{{- $provider := env "EXTERNAL_SECRETS_PROVIDER" | default "oci" }}
+provider: {{ $provider }}
+storeName: {{ if eq $provider "aws" }}{{ env "EXTERNAL_SECRETS_STORE_NAME" | default "aws-secrets-manager" }}{{ else }}{{ env "EXTERNAL_SECRETS_STORE_NAME" | default "oci-vault-store" }}{{ end }}
+ociVaultOcid: {{ env "OCI_VAULT_OCID" | quote }}
+ociVaultRegion: {{ env "OCI_VAULT_REGION" | quote }}
+ociUserOcid: {{ env "OCI_VAULT_USER_OCID" | quote }}
+ociTenancyOcid: {{ env "OCI_VAULT_TENANCY_OCID" | quote }}
+ociAuthSecretName: {{ env "EXTERNAL_SECRETS_AUTH_SECRET_NAME" | default "oci-credentials" }}
+awsRegion: {{ env "AWS_SECRETS_REGION" | default (env "AWS_REGION") | quote }}
+awsAuthMethod: {{ env "EXTERNAL_SECRETS_AWS_AUTH" | default "secretRef" }}
+awsAuthSecretName: {{ env "EXTERNAL_SECRETS_AUTH_SECRET_NAME" | default "aws-credentials" }}
+awsAccessKeyIdKey: {{ env "EXTERNAL_SECRETS_AWS_ACCESS_KEY_ID_KEY" | default "access-key-id" }}
+awsSecretAccessKeyKey: {{ env "EXTERNAL_SECRETS_AWS_SECRET_ACCESS_KEY_KEY" | default "secret-access-key" }}
+awsServiceAccountName: {{ env "EXTERNAL_SECRETS_AWS_SERVICE_ACCOUNT" | default "external-secrets" }}
+awsServiceAccountNamespace: {{ env "EXTERNAL_SECRETS_AWS_SERVICE_ACCOUNT_NAMESPACE" | default "external-secrets" }}
